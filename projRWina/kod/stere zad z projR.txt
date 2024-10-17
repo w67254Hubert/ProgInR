@@ -1,0 +1,92 @@
+
+# Inicjalizacja pustej listy do przechowywania wyników
+results <- list()
+
+# Wybierz dwie zmienne charakterystyk wina
+selected_variables <- c("pH", "chlorides")
+
+# Dla każdej zmiennej charakterystycznej
+for (var in selected_variables) {
+  cat("Zmienna:", var, "\n")
+  
+  # Inicjalizacja pustej listy do przechowywania wyników dla danego koloru wina
+  var_results <- list()
+  
+  # Dla każdego koloru wina
+  for (color in unique(winequality$color)) {
+    cat("Kolor wina:", color, "\n")
+    
+    # Filtracja danych dla danego koloru wina
+    wine_color <- winequality[winequality$color == color, ]
+    
+    # Obliczenie wariancji dla danej zmiennej w danym kolorze wina
+    var_value <- var(wine_color[[var]])
+    
+    cat("Wariancja dla win", color, ":", var_value, "\n")
+
+######Wybierz 2 zmienne charakterystyk wina. Sprawdź czy średni poziom każdej zmiennej różni się pomiędzy regionami Włoch.
+
+# Inicjalizacja pustej listy do przechowywania wyników
+results <- list()
+
+# Wybierz dwie zmienne charakterystyk wina
+selected_variables <- c("fixed.acidity", "volatile.acidity")
+
+# Dla każdej zmiennej charakterystycznej
+for (var in selected_variables) {
+  cat("Zmienna:", var, "\n")
+  
+  # Inicjalizacja pustej listy do przechowywania wyników dla danego regionu
+  var_results <- list()
+  
+  # Dla każdego regionu we Włoszech
+  for (region in unique(winequality$region)) {
+    cat("Region:", region, "\n")
+    
+    # Filtracja danych dla danego regionu
+    wine_region <- winequality[winequality$region == region, ]
+    
+    # Obliczenie średniej dla danej zmiennej w danym regionie
+    mean_value <- mean(wine_region[[var]])
+    
+    cat("Średnia dla", var, "w regionie", region, ":", mean_value, "\n")
+    
+    # Zapisanie wyniku do listy
+    var_results[[region]] <- mean_value
+  }
+  
+  # Zapisanie wyników dla danej zmiennej do głównej listy
+  results[[var]] <- var_results
+}
+
+# Konwersja wyników do tabeli
+results_table <- do.call(rbind, lapply(names(results), function(var) {
+  data.frame(variable = var, 
+             `Bolonia` = results[[var]]$`Bolonia`,
+             `Catania` = results[[var]]$`Catania`,
+             `Emilia Romana` = results[[var]]$`Emilia Romana`)
+}))
+
+# Wyświetlenie tabeli
+print(results_table)
+#wnioski: Do napisania!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    
+    # Zapisanie wyniku do listy
+    var_results[[color]] <- var_value
+  }
+  
+  # Zapisanie wyników dla danej zmiennej do głównej listy
+  results[[var]] <- var_results
+}
+
+# Konwersja wyników do tabeli
+results_table <- do.call(rbind, lapply(names(results), function(var) {
+  data.frame(variable = var, 
+             red = results[[var]]$red,
+             white = results[[var]]$white)
+}))
+
+# Wyświetlenie tabeli
+print(results_table)
+#wnioski: do napisania wnioski!!!!!!!!!!!!!!!!!!!!!!!!!!

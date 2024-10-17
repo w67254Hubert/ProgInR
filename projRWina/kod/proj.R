@@ -1,0 +1,421 @@
+library(dplyr)
+library(ggplot2)
+library(tibble)
+library(e1071)
+library(ipred)
+library(rattle)
+library(rpart) #tu jest algorytm CART
+library(rpart.plot)
+library(mlbench)# pakiet z danymi w R
+library(bitops)
+library(caret)
+library(tidyverse)
+library(readr)
+library(randomForest)
+library(kernlab)
+winequality <- read_csv2('C:\\Users\\hubla\\Documents\\studia-pliki\\dronrzenie R\\Wine quality\\winequality.csv',name_repair = make.names)
+winequality_test <- read_csv2('C:\\Users\\hubla\\Documents\\studia-pliki\\dronrzenie R\\Wine quality\\winequality_test.csv',name_repair = make.names)
+
+head(data1, 5)
+head(winequality)
+head(winequality_test)
+#zakładamy że sposób na ocene win jest jednakowy dla win białych jak i czerwonych
+#####Sprawdź ile próbek jest win białych i czerwonych z każdego regionu Włoch (tabela)
+wyniki <- table(winequality$region, winequality$color)
+print(wyniki)
+#Z podanej tabeli widzimy ze najwięcej win czerwonych pochodzi z boloni a najwięcej białych z catani
+
+
+#####Scharakteryzuj 3 wybrane zmienne: minimum, pierwszy kwartyl, medina, średnia, trzeci kwartyl, maksimum, odchylenie standardowe, wybraną miarę asymetrii i koncentracji w każdej z 6 grup: wina czerwone z Katanii, wina białe z Katanii, wina czerwone z Bolonii itd.
+#minimum , średnia, maksimum 
+winequality %>%
+  group_by(region, color) %>%
+  summarise(
+    min_zaw_alk = min(alcohol), 
+    srd_zaw_alk = mean(alcohol), 
+    max_zaw_alk = max(alcohol),
+    kwantyl_1 = quantile(alcohol, 0.25), # pierwszy kwartyl
+    kwantyl_2 = quantile(alcohol, 0.50), # mediana
+    kwantyl_3 = quantile(alcohol, 0.75), # trzeci kwartyl
+    odchStand = sd(alcohol), 
+    miarAsym = skewness(alcohol), 
+    miaraKoncentracji = kurtosis(alcohol)
+  )
+
+# Dla każdego regionu i koloru wina obliczono statystyki opisowe zawartości alkoholu, takie jak: minimum (min_zaw_alk), średnia (srd_zaw_alk), maksimum (max_zaw_alk), kwartyle (kwantyl_1, kwantyl_2, kwantyl_3), odchylenie standardowe (odchStand), skośność (miarAsym) i kurtoza (miaraKoncentracji).
+#Wszystkie te statystyki pomagają zrozumieć rozkład zawartości alkoholu w winach z różnych regionów i o różnych kolorach.
+#chatowe piepszenie
+######Dla wybranych 2 zmiennych zrób wykres ramka-wąsy (boxplot). Niech kolor wina będzie tworzył serie. Dodał tytuł, opis osi, legendę. 
+
+#wniosek: wina czerwone mają większą kwasowość nieżeli wina białe 
+
+ggplot(winequality, aes(x = color, y = fixed_acidity, fill = color)) +
+  geom_boxplot() +
+  labs(
+    title = "Wykres ramka-wąsy dla kwasowości stałej wina",
+    x = "Kolor wina",
+    y = "Kwasowość stała",
+    fill = "Kolor wina"
+  ) +
+  theme_minimal()#wniosek: wina czerwone mają większą kwasowość nieżeli wina białe 
+
+
+ggplot(winequality, aes(x = color, y = alcohol , fill = color)) +
+  geom_boxplot() +
+  labs(
+    title = "Wykres ramka-wąsy dla alcohol  wina",
+    x = "Kolor wina",
+    y = "zawartość alcoholu",
+    fill = "Kolor wina"
+  ) +
+  theme_minimal()#wniski michał dawaj chacik
+
+
+########Dla wybranych 2 zmiennych zrób wykres ramka-wąsy (boxplot). Niech region Włoch będzie tworzył serie. Dodał tytuł, opis osi, legendę.
+ggplot(winequality, aes(x = region, y = quality, fill = color)) +
+  geom_boxplot() +
+  labs(
+    title = "Wykres ramka-wąsy dla kwasowości stałej wina w regionach Włoch",
+    x = "region",
+    y = "jakość wina",
+    fill = "Kolor wina"
+  ) +
+  theme_minimal() #wnioski śreania jakość białych win z boloni jest wyrsza w porównaniu do innych regionów
+
+#######Dla dwóch par wybranych zmiennych zrób wykres rozrzutu. Niech kolor wina będzie tworzył serie. Dodał tytuł, opis osi, legendę.
+
+ggplot(winequality, aes(x = volatile.acidity, y = fixed.acidity, color = color)) +
+  geom_point() +
+  labs(
+    title = "Wykres rozrzutu dla kwasowości stałej i lotnej wina",
+    x = "Lotna kwasowość",
+    y = "Kwasowość stała",
+    color = "Kolor wina"
+  ) +
+  theme_minimal()+
+  facet_wrap(~ color, nrow = 1) +
+  scale_color_discrete(name = "kolor")# wina buałe mają mniejszy stosunek kwasowości stałej i lotnej względem win czerwonych nie widać zależności w kwasowości
+
+#2 wykres 
+
+ggplot(winequality, aes(x = density, y = alcohol, color = color)) +
+  geom_point() +
+  labs(
+    title = "Wykres rozrzutu dla kwasowości stałej i lotnej wina",
+    x = "gęstość",
+    y = "zawatrość alkocholu",
+    color = "Kolor wina"
+  ) +
+  theme_minimal()+
+  xlim(0.986, 1.01)+
+  ylim(8., 14.1)+
+  facet_wrap(~ color, nrow = 1) +
+  scale_color_discrete(name = "kolor")
+#wniosek: na wykresie widzimy zależność im mniejsza zawatrość alkocholu w winie tym zwiększa się jego gęstość.
+#możemy też zaobserwować że wina czerwone są gęstże względem win białych
+#albo Brak wyraźnego rozróżnienia między winami czerwonymi a białymi:
+
+
+#######Dla dwóch par wybranych zmiennych zrób wykres rozrzutu. Niech region Włoch będzie tworzył serie. Dodał tytuł, opis osi, legendę.
+
+ggplot(winequality, aes(x = free.sulfur.dioxide, y = total.sulfur.dioxide, color = region)) +
+  geom_point() +
+  labs(
+    title = "Wykres rozrzutu dla zawartości wolnego ditlenku siarki i całkowitego ditlenku siarki",
+    x = "Zawartość wolnego ditlenku siarki",
+    y = "Całkowity ditlenek siarki"
+  ) +
+  theme_minimal() +
+  xlim(0, 110)+
+  ylim(0, 300)+
+  facet_wrap(~ region, nrow = 1) +
+  scale_color_discrete(name = "Regiony Włoch")
+#wniosek:
+#Pozytywna korelacja: Wydaje się, że istnieje pozytywna zależność między zawartością wolnego ditlenku siarki a całkowitym ditlenkiem siarki we wszystkich trzech lokalizacjach.
+#Zmienność: Rozproszenie punktów danych sugeruje zmienność tej zależności w różnych próbkach lub pomiarach.
+#Brak odstających punktów: Żadna z lokalizacji nie pokazuje oczywistego punktu odstającego lub anomali, która znacznie odbiega od ogólnej tendencji.
+#Gęstość punktów: Gęstość punktów może wskazywać na powszechne zakresy zarówno dla zawartości wolnego, jak i całkowitego ditlenku siarki w tych obszarach.
+
+#wykres 2
+
+ggplot(winequality, aes(x = fixed.acidity, y = pH, color = region)) +
+  geom_point() +
+  labs(
+    title = "Wykres rozrzutu dla zawartości stałej kwasowej i pH wina",
+    x = "kwasowość stała",
+    y = "pH"
+  ) +
+  theme_minimal() +
+  xlim(2.5, 20) +
+  ylim(2.5, 4) +
+  facet_wrap(~ region, nrow = 1) +
+  scale_color_discrete(name = "Region Włoch")
+#wnioski
+#Bolonia (czerwone punkty): Wykres rozrzutu pokazuje umiarkowaną do silną ujemną korelację między kwasowością stałą a pH wina. W miarę wzrostu kwasowości stałej pH maleje.
+#Catania (zielone punkty): Korelacja między kwasowością stałą a pH jest mniej wyraźna niż w przypadku Bolonii, ale nadal widoczna.
+#Emilia Romana (niebieskie punkty): Dane są bardziej rozproszone, co sugeruje słabszą lub brak wyraźnej korelacji między kwasowością stałą a pH.
+
+######Zbuduj 95% przedział ufności dla średniej i wariancji dla dwóch wybranych zmiennych osobno dla win z Bolonii, Katanii i Emilii Romany.
+#1 kod
+mean_fixed_acidity <- mean(fixed_acidity)
+mean_alcohol <- mean(alcohol)
+sd_fixed_acidity <- sd(fixed_acidity)
+sd_alcohol <- sd(alcohol)
+
+# Oblicz przedział ufności dla średniej (95%)
+n <- length(fixed_acidity)
+z <- qnorm(0.975)  # Wartość krytyczna dla poziomu ufności 95%
+ci_mean_fixed_acidity <- c(mean_fixed_acidity - z * sd_fixed_acidity / sqrt(n),
+                           mean_fixed_acidity + z * sd_fixed_acidity / sqrt(n))
+
+# Oblicz przedział ufności dla wariancji (95%)
+alpha <- 0.05
+chi2_lower <- qchisq(alpha / 2, df = n - 1)
+chi2_upper <- qchisq(1 - alpha / 2, df = n - 1)
+ci_var_fixed_acidity <- c((n - 1) * sd_fixed_acidity^2 / chi2_upper,
+                          (n - 1) * sd_fixed_acidity^2 / chi2_lower)
+
+# Wyświetl wyniki
+cat("Przedział ufności dla średniej (fixed acidity):", ci_mean_fixed_acidity, "\n")
+cat("Przedział ufności dla wariancji (fixed acidity):", ci_var_fixed_acidity, "\n")
+
+#2 kod 
+
+# Poziom ufności
+confidence_level <- 0.95
+
+# Funkcja do obliczania przedziału ufności dla średniej
+calculate_mean_ci <- function(winequality, confidence_level) {
+  n <- length(winequality)
+  mean_val <- mean(winequality)
+  std_dev <- sqrt(var(winequality))
+  error_margin <- qnorm(1 - (1 - confidence_level) / 2) * (std_dev / sqrt(n))
+  lower_bound <- mean_val - error_margin
+  upper_bound <- mean_val + error_margin
+  return(list(lower_bound = lower_bound, upper_bound = upper_bound))
+}
+
+# Funkcja do obliczania przedziału ufności dla wariancji
+calculate_variance_ci <- function(winequality, confidence_level) {
+  n <- length(winequality)
+  variance_val <- var(winequality)
+  lower_bound <- (n - 1) * variance_val / qchisq(1 - (1 - confidence_level) / 2, df = n - 1)
+  upper_bound <- (n - 1) * variance_val / qchisq((1 - confidence_level) / 2, df = n - 1)
+  return(list(lower_bound = lower_bound, upper_bound = upper_bound))
+}
+
+# Obliczanie przedziałów ufności dla średniej i wariancji dla zmiennej 1
+mean_ci_variable1 <- calculate_mean_ci(winequality$alcohol, confidence_level)
+variance_ci_variable1 <- calculate_variance_ci(winequality$alcohol, confidence_level)
+
+# Obliczanie przedziałów ufności dla średniej i wariancji dla zmiennej 2
+mean_ci_variable2 <- calculate_mean_ci(winequality$fixed.acidity, confidence_level)
+variance_ci_variable2 <- calculate_variance_ci(winequality$fixed.acidity, confidence_level)
+
+# Wyświetlanie wyników przerobić na tabele pewnie prosto !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+cat("Przedział ufności dla średniej alcoholu:\n")
+cat("Lower Bound:", mean_ci_variable1$lower_bound, "\n")
+cat("Upper Bound:", mean_ci_variable1$upper_bound, "\n\n")
+
+cat("Przedział ufności dla wariancji alcoholu:\n")
+cat("Lower Bound:", variance_ci_variable1$lower_bound, "\n")
+cat("Upper Bound:", variance_ci_variable1$upper_bound, "\n\n")
+
+cat("Przedział ufności dla średniej fixed.acidity:\n")
+cat("Lower Bound:", mean_ci_variable2$lower_bound, "\n")
+cat("Upper Bound:", mean_ci_variable2$upper_bound, "\n\n")
+
+cat("Przedział ufności dla wariancji fixed.acidity:\n")
+cat("Lower Bound:", variance_ci_variable2$lower_bound, "\n")
+cat("Upper Bound:", variance_ci_variable2$upper_bound, "\n")
+
+#wnioski do napisania i wybrać który sposób lepszy !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+#####Sprawdź czy poziom siarki istotnie zmienił się po filtracji (zmienne sulphates i sulphates after filtering). Test wykonaj dla wszystkich win ogółem jak i w podziale na kolor wina.
+
+Siarka_przed <- winequality$sulphates
+Siarka_po <- winequality$sulphates.after.filtering
+
+#Test t-studenta dla wszystkich win ogółem
+test_all <- t.test(Siarka_przed, Siarka_po,paired = TRUE)#zmiana do poprawy niżej 
+print(test_all)
+
+
+#Test t-studenta dla win białych
+test_biale <- t.test(winequality$sulphates[winequality$color == "white"], winequality$'sulphates after filtering'[winequality$color == "white"])
+print(test_biale)
+
+#Test t-studenta dla win czerwonych
+test_red <- t.test(winequality$sulphates[winequality$color == "red"], winequality$'sulphates after filtering'[winequality$color == "red"])
+print(test_red)
+
+#do ogarnięcia co się tu dzieje i co trzeba było dokładnie zrobic
+# jak to ma się do r martdown tak można?
+
+
+######Wybierz 2 zmienne charakterystyk wina. Sprawdź czy średni poziom każdej zmiennej różni się pomiędzy grupą win czerwonych a białych.
+
+
+selected_variables <- c("fixed.acidity", "volatile.acidity")
+
+# Test t-Studenta dla każdej zmiennych między grupami win czerwonych a białych
+
+for (variable in selected_variables) {
+  red_wine <- winequality %>% filter(color == "red") %>% pull(variable)
+  white_wine <- winequality %>% filter(color == "white") %>% pull(variable)
+  
+  t_test_result <- t.test(red_wine, white_wine)
+  
+  cat("Wyniki testu t-Studenta dla zmiennej", variable, ":\n")
+  print(t_test_result) }
+
+#do ogarnięcia co się tu dzieje i co trzeba było dokładnie zrobic
+
+
+#########Wybierz 2 zmienne charakterystyk wina. Sprawdź czy wariancja każdej zmiennej różni się pomiędzy grupą win czerwonych a białych.
+red_wine <- winequality %>% filter(color == "red")
+white_wine <- winequality %>% filter(color == "white")
+
+# Test F for comparing variance of pH variable
+var_test_ph <- var.test(red_wine$pH, white_wine$pH)
+print(var_test_ph)
+
+# Test F for comparing variance of chlorides variable
+var_test_chlorides <- var.test(red_wine$chlorides, white_wine$chlorides)
+print(var_test_chlorides)
+
+
+######Wybierz 2 zmienne charakterystyk wina. Sprawdź czy średni poziom każdej zmiennej różni się pomiędzy regionami Włoch.
+
+selected_variables <- c("fixed.acidity", "volatile.acidity")
+
+for (variable in selected_variables) {
+  reg_Bolonia <- winequality %>% filter(region == "Bolonia") %>% pull(variable)
+  reg_Emila_Romana <- winequality %>% filter(region == "Emilia Romana") %>% pull(variable)
+  reg_Catania <- winequality %>% filter(region == "Catania") %>% pull(variable)
+  
+  t_test_result1 <- t.test(reg_Bolonia)
+  t_test_result2 <- t.test(reg_Emila_Romana)
+  t_test_result3 <- t.test(reg_Catania)
+  
+  
+  cat("Wyniki testu t-Studenta dla zmiennej", variable, ":\n")
+  print(t_test_result1)
+  print(t_test_result2)
+  print(t_test_result3)
+}
+######Od czego zależy jakość wina (zmienna quality)? W zbiorze winequality_test są dane nowych próbek win. Spróbuj - w oparciu o dotychczas wykonane analizy albo dodatkowe własne analizy – ocenić jakość wina (bez jego picia).
+
+
+#levels(winequality$region) <- c('Catania','Emilia Romana','Bolonia')
+levels(winequality$quality) <- c(1,2,3,4,5,6,7,8,9,10)
+
+# zrób wykresy pudełkowe wszystkich zmiennych numerycznych względem zmiennej Type
+# które zmienne byłyby dobrymi predyktorami zmiennej Type?
+
+head(winequality)
+boxplot(winequality$fixed.acidity~winequality$quality)
+boxplot(winequality$volatile.acidity~winequality$quality)
+boxplot(winequality$citric.acid~winequality$quality)
+boxplot(winequality$residual.sugar~winequality$quality)
+boxplot(winequality$chlorides ~winequality$quality)####
+
+boxplot(winequality$free.sulfur.dioxide~winequality$quality)
+boxplot(winequality$total.sulfur.dioxide~winequality$quality)###
+boxplot(winequality$density~winequality$quality)###
+boxplot(winequality$pH~winequality$quality)
+boxplot(winequality$sulphates~winequality$quality)
+boxplot(winequality$sulphates.after.filtering   ~winequality$quality)
+boxplot(winequality$alcohol~winequality$quality)##
+# z #### to wykresy sensowne napisz wnioski
+
+#Model rf
+
+
+ggplot(winequality, aes(x = quality, y = chlorides)) +
+  geom_point() +
+  labs(
+    title = "Wykres rozrzutu dla zawartości stałej kwasowej i pH wina",
+    x = "kwasowość stała",
+    y = "pH"
+  ) +
+  theme_minimal() 
+#im większa zawartość hlorków tym bardziej średania ocena a im mniejesza to albo niska albo wysoka ocena
+
+# drzewo decyzyjne
+wineType <- rpart(region~.,	# formuła postaci y~x1+x2 
+                  data=winequality, # nazwa ramki danych skąd brane są zmienne
+                  method="class", # dla problemu regresji wybieramy 'anova', dla klasyfikacji wybieramy  'class'
+                  model=FALSE, # czy zachować kopię modelu?
+                  control=rpart.control(minsplit=2,minbucket =1,cp=0.015,xval=10), # parametry algorytmu definiowane przez obiekt rpart.control
+                  na.action=na.rpart # co robić z NA?
+) 
+
+rpart.plot(wineType)
+
+
+# ocena modelu 
+rsq.rpart(wineType) #1 - R2 modelu oraz R2 w walidacji krzyżowej, 2 - odsetek błędnych predykcji
+plotcp(wineType) # cp - minimalna wymagana zmiana R2/Accuracy, aby dokonać podziału drzewa
+printcp(wineType) # Root node error - porównaj z 1-max(table(wine$Type))/nrow(wine)
+summary(wineType)
+
+
+# sprawdź dokładność predykcji modelu
+
+predict(wineType,winequality[,-1],type = "prob")
+predict(wineType,winequality[,-1],type = "class")
+
+table(winequality$region,predict(wineType,winequality[,-1],type = "class"))
+caret::confusionMatrix(winequality$region,predict(wineType,winequality[,-1],type = "class"))
+
+model_kNN=caret::train(Type~.,method='knn',data=winequality,trControl=trainControl(method = 'repeatedcv',repeats = 10,number = 10),
+                       tuneGrid=data.frame(k=1:30))
+
+caret::confusionMatrix(model_kNN)
+
+
+#########################################################################test
+
+
+
+# Dane wejściowe
+data <- winequality
+
+# Podział danych na zbiór treningowy i testowy
+set.seed(132)
+train_index <- sample(seq_len(nrow(data)), size = 0.7 * nrow(data))
+train_data <- data[train_index, ]
+test_data <- data[-train_index, ]
+
+#Sprawdzenie brakujących wartości w zbiorze treningowym
+print(colSums(is.na(train_data)))
+train_data <- train_data %>% drop_na()
+print(colSums(is.na(train_data)))
+
+print(colSums(is.na(test_data)))
+test_data <- test_data %>% drop_na()
+print(colSums(is.na(test_data)))
+
+
+#Model rf
+model_rf <- train(quality ~ . -region -color , method = 'rf', data = train_data, trControl = trainControl(method = 'none'),
+                   tuneGrid =NULL)#trenowanie modelu karzde trefnowanie tworzy nowy model
+
+#Ocena modelu rf
+rf_predictions <- predict(model_rf, newdata = test_data)
+rf_predictions<- round(rf_predictions,0)
+rf_results <- data.frame(Actual = test_data$quality, Predicted = rf_predictions)
+rf_mae <- mean(abs(rf_results$Actual - round(rf_results$Predicted,0)))
+print(paste("Mean Absolute Error (rf):", round(rf_mae, 2)))#tu wyświetla średnią błędów ok 36%
+
+view(rf_results)#tu wyświetla porównanie predykcji do właścywych danch
+
+rf_predictions <- predict(model_rf, newdata = winequality_test)
+rf_predictions<- round(rf_predictions,0)
+zobacz<-data.frame(winequality_test,rf_predictions)
+view(zobacz) #predykcja dla testu
+#jak chcesz wyeksportuj to sobie do csv bo trenowanie modelu zamuje i za karzdym razem jest inne
+
